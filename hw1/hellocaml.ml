@@ -481,7 +481,7 @@ let pair_up (x:'a) : ('a * 'a) = (x, x)
 let third_of_three (t: 'a * 'b * 'c) : 'c =
   begin match t with
     | (_, _, x) -> x
-end
+  end
 
 
 (*
@@ -494,7 +494,9 @@ end
 *)
 
 let compose_pair (p:(('b -> 'c) * ('a -> 'b))) : 'a -> 'c =
-  fun _ -> failwith("Not yet!")
+  begin match p with
+    | f, g -> fun (x: 'a) -> f (g x)
+  end
 
 
 
@@ -701,7 +703,10 @@ let rec append (l1:'a list) (l2:'a list) : 'a list =
   you might want to call append.  Do not use the library function.
 *)
 let rec rev (l:'a list) : 'a list =
-failwith "rev unimplemented"
+  begin match l with
+    | [] -> l
+    | hd :: tl -> (rev tl) @ [hd]
+  end
 
 (*
   Problem 3-4
@@ -714,8 +719,11 @@ failwith "rev unimplemented"
   to efficiency -- OCaml will compile a tail recursive function to a
   simple loop.
 *)
-let rev_t (l: 'a list) : 'a list =
-failwith "rev_t unimplemented"
+let rev_t (l:'a list) : 'a list =
+  let rec aux acc = function 
+    | [] -> acc
+    | hd :: tl -> aux (hd :: acc) tl in
+  aux [] l
 
 
 (*
@@ -732,7 +740,13 @@ failwith "rev_t unimplemented"
   evaluates to true or false.
 *)
 let rec insert (x:'a) (l:'a list) : 'a list =
-failwith "insert unimplemented"
+  begin match l with
+    | [] -> [x]
+    | [hd] -> 
+        if x > hd then [hd] @ [x] else if x = hd then [hd] else [x] @ [hd]
+    | hd :: tl ->
+        if x < hd then [x] @ (hd :: tl) else [hd] @ (insert x tl)
+  end
   
   
 (*
@@ -742,13 +756,20 @@ failwith "insert unimplemented"
   sorted list containing all of the elements from both of the two input lists.  
   Hint: you might want to use the insert function that you just defined.
 *)
-let rec union (l1:'a list) (l2:'a list) : 'a list =
- failwith "union unimplemented"
 
+let rec union (l1:'a list) (l2:'a list) : 'a list =
+    begin match l1, l2 with
+    | [], [] -> []
+    | [], [_] -> l2
+    | [_], [] -> l1
+    | [hd1], [hd2] -> if hd1 = hd2 then [hd1] else insert hd1 [hd2] 
+    | h1 :: t1, h2 :: t2 -> 
+        if h1 < h2 then h1 :: (union t1 l2) else h2 :: (union t2 l1)
+    | _, _ -> []
+    end 
 
             
-                              
-                                                  
+                                                                          
 (******************************************************************************)
 (*                                                                            *)
 (* PART 3: Expression Trees and Interpreters                                  *)
@@ -834,8 +855,12 @@ let e3 : exp = Mult(Var "y", Mult(e2, Neg e2))     (* "y * ((x+1) * -(x+1))" *)
   Hint: you probably want to use the 'union' function you wrote for Problem 3-5.
 *)
 let rec vars_of (e:exp) : string list =
-failwith "vars_of unimplemented"
-
+  begin match e with
+  | Const c -> []
+  | Var v -> [v]
+  | Neg(e1) -> vars_of(e1)
+  | Add(e1, e2) | Mult(e1, e2) -> union (vars_of e1) (vars_of e2)
+  end
 
 (*
   How should we _interpret_ (i.e. give meaning to) an expression?
@@ -895,8 +920,13 @@ let ctxt2 : ctxt = [("x", 2L); ("y", 7L)]  (* maps "x" to 2L, "y" to 7L *)
   the int64 value associated with a given string in the ctxt c.  If there is no
   such value, it should raise the Not_found exception.
 *)
-let rec lookup (x:string) (c:ctxt) : int64 =
-failwith "unimplemented"
+
+let rec lookup (x: string) (c: ctxt) : int64 =
+    begin match c with
+    | [(e1, e2)] -> if e1 = x then e2 else raise Not_found
+    | (hda, hdb) :: tl -> if hda = x then hdb else lookup x tl
+    | _ -> raise Not_found
+    end
 
 
 (* 
@@ -923,9 +953,13 @@ failwith "unimplemented"
 *)        
 
 let rec interpret (c:ctxt) (e:exp) : int64 =
-  failwith "unimplemented"
-
-
+  begin match e with
+  | Const c -> c
+  | Var v -> lookup v c
+  | Neg e1 -> Int64.neg (interpret c e1)
+  | Add (e1, e2) -> Int64.add (interpret c e1) (interpret c e2)
+  | Mult (e1, e2) -> Int64.mul (interpret c e1) (interpret c e2)
+  end
 (*
   Problem 4-4
  
@@ -966,10 +1000,25 @@ let rec interpret (c:ctxt) (e:exp) : int64 =
           -- adding 0, multiplying by 0 or 1, constants, etc.
 
   Hint: what simple optimizations can you do with Neg?
-*)   
+*)
 
 let rec optimize (e:exp) : exp =
-failwith "optimize unimplemented"  
+  begin match e with
+  | Const c -> Const c
+  | Var x -> Var x 
+  | Add(Const 0L, e1) | Add(e1, Const 0L) | Mult(Const 1L, e1) | Mult(e1, Const 1L) -> optimize e1
+  | Add(Const c1, Const c2) -> Const (Int64.add c1 c2)
+  | Add(Var x, Neg(Var y)) -> if x = y then Const 0L else Add(Var x, Neg(Var y))
+  | Add(Mult(Const c1, Var x), Mult(Const c2, Var y)) -> 
+      if x = y then Mult(Const(Int64.add c1 c2), Var x) else Add(Mult(Const c1, Var x), Mult(Const c2, Var y))
+  | Mult(Const 0L, e1) | Mult(e1, Const 0L) -> Const 0L
+  | Mult(Const -1L, e1) | Mult(e1, Const -1L) -> Neg (optimize e1)
+  | Neg (Const c) -> Const (Int64.mul (Int64.neg 1L) c)
+  | Neg e1 -> Neg (optimize e1)
+  | Add(e1, e2) -> optimize (Add((optimize e1), (optimize e2)))
+  | Mult(e1, e2) -> optimize (Mult((optimize e1), (optimize e2)))
+  end
+
   
 
 (******************************************************************************)
@@ -1113,7 +1162,13 @@ let ans1 = run [] p1
    - You should test the correctness of your compiler on several examples.
 *)
 let rec compile (e:exp) : program =
-failwith "compile unimplemented"  
+    begin match e with
+    | Const c -> [IPushC c]
+    | Var v -> [IPushV v]
+    | Neg e1 -> INeg :: (compile e1)
+    | Add (e1, e2) -> (compile e1) @ (compile e2) @ [IAdd]
+    | Mult (e1, e2) -> (compile e1) @ (compile e2) @ [IMul]
+    end
 
 
 
