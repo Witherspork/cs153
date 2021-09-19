@@ -764,7 +764,7 @@ let rec union (l1:'a list) (l2:'a list) : 'a list =
     | [_], [] -> l1
     | [hd1], [hd2] -> if hd1 = hd2 then [hd1] else insert hd1 [hd2] 
     | h1 :: t1, h2 :: t2 -> 
-        if h1 < h2 then h1 :: (union t1 l2) else h2 :: (union t2 l1)
+        if h1 < h2 then h1 :: (union t1 l2) else if h1 > h2 then h2 :: (union t2 l1) else h1 :: (union t1 t2)
     | _, _ -> []
     end 
 
@@ -1005,20 +1005,27 @@ let rec interpret (c:ctxt) (e:exp) : int64 =
 let rec optimize (e:exp) : exp =
   begin match e with
   | Const c -> Const c
-  | Var x -> Var x 
-  | Add(Const 0L, e1) | Add(e1, Const 0L) | Mult(Const 1L, e1) | Mult(e1, Const 1L) -> optimize e1
-  | Add(Const c1, Const c2) -> Const (Int64.add c1 c2)
-  | Add(Var x, Neg(Var y)) -> if x = y then Const 0L else Add(Var x, Neg(Var y))
-  | Add(Mult(Const c1, Var x), Mult(Const c2, Var y)) -> 
-      if x = y then Mult(Const(Int64.add c1 c2), Var x) else Add(Mult(Const c1, Var x), Mult(Const c2, Var y))
-  | Mult(Const 0L, e1) | Mult(e1, Const 0L) -> Const 0L
-  | Mult(Const -1L, e1) | Mult(e1, Const -1L) -> Neg (optimize e1)
-  | Neg (Const c) -> Const (Int64.mul (Int64.neg 1L) c)
-  | Neg e1 -> Neg (optimize e1)
-  | Add(e1, e2) -> optimize (Add((optimize e1), (optimize e2)))
-  | Mult(e1, e2) -> optimize (Mult((optimize e1), (optimize e2)))
+  | Var x -> Var x
+  | Neg (e1) ->
+    begin match (optimize e1) with
+    | Const c -> Const (Int64.mul (Int64.neg 1L) c)
+    | ex1 -> optimize ex1
+    end
+  | Add (e1, e2) ->
+    begin match (optimize e1, optimize e2) with
+    | Const 0L, ex1 | ex1, Const 0L -> optimize ex1
+    | Const c1, Const c2 -> Const (Int64.add c1 c2)
+    | ex1, ex2 -> Add ((optimize ex1), optimize(ex2))
+    end
+  | Mult (e1, e2) ->
+    begin match (optimize e1, optimize e2) with
+    | Const c1, Const c2 -> Const (Int64.mul c1 c2)
+    | Const 0L, ex1 | ex1, Const 0L -> Const 0L
+    | Const 1L, ex1 | ex1, Const 1L -> optimize ex1
+    | Const (-1L), ex1 | ex1, Const (-1L) -> Neg (optimize ex1)
+    | ex1, ex2 -> Mult((optimize ex1), optimize ex2)
+    end
   end
-
   
 
 (******************************************************************************)
@@ -1162,7 +1169,7 @@ let ans1 = run [] p1
    - You should test the correctness of your compiler on several examples.
 *)
 let rec compile (e:exp) : program =
-    begin match e with
+    begin match (optimize e) with
     | Const c -> [IPushC c]
     | Var v -> [IPushV v]
     | Neg e1 -> INeg :: (compile e1)
