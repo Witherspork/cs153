@@ -67,6 +67,59 @@ let factorial_rec n = [ text "fac"
                                  ]
                       ]
 
+let recursive_sum_up_to n = [ text "rec sum"
+                      [
+                        Subq, [~$8; ~%Rsp];
+                        Cmpq, [~$0; ~%Rdi];
+                        J Eq, [~$$"exit"];
+                        Movq,  [~%Rdi; Ind2 Rsp];
+                        Decq,  [~%Rdi];
+                        Callq, [~$$"rec sum"];
+                        Addq, [Ind2 Rsp; ~%Rax];
+                        Addq,  [~$8; ~%Rsp];
+                        Retq, []
+                      ];
+                      text "exit"
+                      [ Movq,  [~$1; ~%Rax];
+                        Addq,  [~$8; ~%Rsp];
+                        Retq,  [] 
+                      ];
+                      gtext "main"
+                      [
+                        Movq, [~$n; ~%Rdi];
+                        Callq, [~$$"rec sum"];
+                        Retq, []
+                      ]
+]
+
+let iter_sum_to n = [
+                  text "main"
+                  [
+                    Movq, [~$1; ~%Rax];
+                    Movq, [~$n; ~%Rdi]
+                  ];
+                  text "loop"
+                  [
+                    Cmpq, [~$0; ~%Rdi];
+                    J Eq, [~$$"exit"];
+                    Addq, [~%Rdi; ~%Rax];
+                    Decq, [~%Rdi];
+                    Jmp, [~$$"loop"]
+                  ];
+                  text "exit"
+                  [
+                    Retq, []
+                  ]
+]
+
+let recsum = 
+  let temp = assemble(recursive_sum_up_to 5) in
+  load temp
+
+let itersum =
+  let tmp = assemble(iter_sum_to 5) in
+  load tmp
+
 (* Object Builders *)
 
 let sbyte_list (a: sbyte array) (start: int) : sbyte list =
