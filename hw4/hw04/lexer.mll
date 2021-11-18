@@ -28,10 +28,15 @@
   (* Keywords *)
   ("null", NULL);
   ("void", TVOID);
+  ("true", TRUE);
+  ("false", FALSE);
   ("int", TINT);
+  ("bool", TBOOL);
+  ("new", NEW);
   ("string", TSTRING);
   ("else", ELSE);
   ("if", IF);
+  ("for", FOR);
   ("while", WHILE);
   ("return", RETURN);
   ("var", VAR);
@@ -45,15 +50,27 @@
   ( "+", PLUS);
   ( "-", DASH);
   ( "*", STAR);
+   ( "&", LOGAND);
+  ( "|", LOGOR);
+  ( "[&]", BITAND);
+  ( "[|]", BITOR);
+  ( "~", TILDE);
+  ( "!", BANG);
   ( "=", EQ);
   ( "==", EQEQ);
-  ( "!", BANG);
-  ( "~", TILDE);
-  ( "(", LPAREN);
+  ( "!=", NEQ);
+  ( "<<", SHL);
+  ( ">>", SHR);
+  ( ">>>", SAR);
+  ( "<", LT);
+  ( "<=", LTE);
+  ( ">", GT);
+  ( ">=", GTE);
+   ( "(", LPAREN);
   ( ")", RPAREN);
   ( "[", LBRACKET);
   ( "]", RBRACKET);
-  
+ 
   ]
 
 let (symbol_table : (string, Parser.token) Hashtbl.t) = Hashtbl.create 1024
@@ -126,9 +143,12 @@ rule token = parse
   | digit+ | "0x" hexdigit+ { INT (Int64.of_string (lexeme lexbuf)) }
   | whitespace+ { token lexbuf }
   | newline { newline lexbuf; token lexbuf }
-
+  | "void" { TVOID } | "int" { TINT }
+  | "string" { TSTRING } | "new" { NEW }
+  | "bool" { TBOOL } 
   | ';' | ',' | '{' | '}' | '+' | '-' | '*' | '=' | "==" 
-  | "!=" | '!' | '~' | '(' | ')' | '[' | ']' 
+  | "<<" | ">>" | ">>>" | '&' | '|' | '<' | "<=" | '>' | ">="
+  | "!=" | '!' | '~' | '(' | ')' | '[' | ']' | "[&]" | "[|]"
     { create_token lexbuf }
 
   | _ as c { unexpected_char lexbuf c }

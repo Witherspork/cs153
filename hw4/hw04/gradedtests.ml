@@ -132,7 +132,7 @@ let easiest_tests = [
   ("hw4programs/easyrun9.oat", "", "236");
   ("hw4programs/easyrun10.oat", "", "254");
 ]
-
+(*
 let globals_tests = [
   ("hw4programs/globals1.oat", "", "42");
   ("hw4programs/globals2.oat", "", "17");
@@ -219,7 +219,6 @@ let medium_tests = [
   ("hw4programs/lib14.oat", "", "~}|{zyxwvu0");
   ("hw4programs/lib15.oat", "123456789", "456780");
 ]
-
 let hard_tests = [
   ("hw4programs/fac.oat", "", "120");
   ("hw4programs/qsort.oat", "", "kpyf{shomfhkmopsy{255");
@@ -243,17 +242,18 @@ let hard_tests = [
   ("hw4programs/insertion_sort.oat", "", "42");
   ("hw4programs/maxsubsequence.oat", "", "107");
 ]
-
+*)
 
 let tests : suite =
   [ GradedTest("parse tests", 14, parse_tests);
+    (*
     GradedTest("easiest tests", 14, executed_oat_file easiest_tests);
     GradedTest("globals tests", 14, executed_oat_file globals_tests);
     GradedTest("path tests", 10, executed_oat_file path_tests);
     GradedTest("easy tests", 13, executed_oat_file easy_tests);
     GradedTest("medium tests", 10, executed_oat_file medium_tests);
     GradedTest("hard tests", 7, executed_oat_file hard_tests);
-        
+    *)    
   ]
 
 
