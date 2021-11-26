@@ -5,6 +5,8 @@ struct C { int x ; int y ; int z }
 /*  C <: B     B <: B     */
 /* ---------------------- */
 /* (B) -> B  <:  (C) -> B */
+
+
 B? f(B b) {
   return b;
 }

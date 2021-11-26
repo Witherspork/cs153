@@ -162,6 +162,24 @@ let unit_tests = [
   )
 ]
 
+let struct_subtype_tests =
+  let tcx = Tctxt.add_struct(Tctxt.add_struct Tctxt.empty "stctA"
+      [{fieldName="x"; ftyp=TInt}; {fieldName="y"; ftyp=TInt}])
+      "stctB" [{fieldName="x"; ftyp=TInt}] in
+  let tcx2 = Tctxt.add_struct(Tctxt.add_struct Tctxt.empty "stctA"
+  [{fieldName="y"; ftyp=TInt}; {fieldName="y"; ftyp=TInt}])
+  "stctB" [{fieldName="x"; ftyp=TInt}] in
+  [
+  ("well-formed sub_subrstruct",
+  (fun () ->
+      if Typechecker.subtype tcx (TRef (RStruct "stctA")) (TRef (RStruct "stctB")) then ()
+          else failwith "should not fail"));
+
+  ("error in sub_subrstruct", (fun () ->
+      if Typechecker.subtype tcx2 (TRef (RStruct "stctB")) (TRef (RStruct "stctA")) then
+          failwith "should not succeed" else ()));
+]
+
 
 let hw4_easiest_tests = [
   ("hw4programs/easyrun1.oat", "", "17");
@@ -417,6 +435,7 @@ let new_tests = [
   ("hw5programs/length1.oat", "", "5");
   ("hw5programs/compile_array_init.oat", "", "2");
   ("hw5programs/array_oob.oat", "", "Out of bounds index 3 for array length 30001");
+  ("hw5programs/kruskal.oat", "", "(1,4,1) (1,2,3) (2,3,4) (0,1,20) =0");
 ]
 
 let tc_ok_tests = [
@@ -461,12 +480,8 @@ let hw5_tests : suite = [
 
 
 let manual_tests : suite = [
-  GradedTest ("Other Student Ed Oat Tests", 3,
-              [("manually", assert_eq true false)]
-    )
-; GradedTest ("Other Student Ed Unit Tests", 2,
-              [("manually", assert_eq true false)]
-             )
+  GradedTest ("Student Unit Oat Tests", 2,
+      struct_subtype_tests);
 ]
 
 let hw4_tests =
@@ -486,7 +501,8 @@ let graded_tests : suite =
   timeout_suite 10
     (typecheck_tests @
      hw5_tests @
-     functionality_tests
+     functionality_tests @
+     manual_tests
      
     )
     
