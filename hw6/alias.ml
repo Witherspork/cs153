@@ -34,7 +34,21 @@ type fact = SymPtr.t UidM.t
 
  *)
 let insn_flow ((u,i):uid * insn) (d:fact) : fact =
-  failwith "Alias.insn_flow unimplemented"
+    match i with
+    | Alloca _ -> UidM.add u SymPtr.Unique d
+    | Load (Ptr (Ptr _), _) -> UidM.add u SymPtr.MayAlias d
+    | Store (Ptr _, Id i, _) -> UidM.add i SymPtr.MayAlias d
+    | Bitcast (_, Id i, _) | Gep (_, Id i, _) -> 
+        UidM.add u SymPtr.MayAlias (UidM.add i SymPtr.MayAlias d)
+    | Bitcast (_, _, _) | Gep (_, _, _)-> UidM.add u SymPtr.MayAlias d
+    | Call (_, opr, args) ->
+        List.fold_left (fun f1 (_, opr) ->
+            match opr with
+            | Id i -> UidM.add i SymPtr.MayAlias f1
+            | Gid g -> UidM.add g SymPtr.MayAlias f1
+            | _ -> f1) 
+        (UidM.add u SymPtr.MayAlias d) args
+    | _ -> d
 
 
 (* The flow function across terminators is trivial: they never change alias info *)
@@ -69,7 +83,24 @@ module Fact =
        meet of two SymPtr.t facts.
     *)
     let combine (ds:fact list) : fact =
-      failwith "Alias.Fact.combine not implemented"
+        let f2 _ p p2 = (
+            match p, p2 with
+            | None, None -> failwith "No Valid SymPtrs"
+            | Some ptr, None | None, Some ptr ->
+                Some ptr
+            | Some ptr, Some ptr2 -> (
+                match ptr, ptr2 with
+                | SymPtr.UndefAlias, SymPtr.UndefAlias -> 
+                    Some SymPtr.UndefAlias
+                | SymPtr.Unique, SymPtr.Unique -> 
+                    Some SymPtr.Unique
+                | SymPtr.MayAlias, SymPtr.Unique
+                | SymPtr.Unique, SymPtr.MayAlias
+                | SymPtr.MayAlias, SymPtr.MayAlias ->
+                    Some SymPtr.MayAlias
+                | _, _ -> failwith "Invalid SymPtr errror")
+        ) in
+        List.fold_left(fun f3 fct -> UidM.merge f2 fct f3) UidM.empty ds 
   end
 
 (* instantiate the general framework ---------------------------------------- *)

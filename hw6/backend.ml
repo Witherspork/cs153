@@ -112,6 +112,12 @@ module UidSet = Alloc.UidSet
 let str_locset (lo:LocSet.t) : string =
   String.concat " " (List.map Alloc.str_loc (LocSet.elements lo))
 
+module Map_of_LocSet = Map.Make (struct type t = Alloc.loc let compare = (fun x x2 ->
+    let s = str_locset (LocSet.singleton x) in
+    let s2 = str_locset (LocSet.singleton x2) in
+    String.compare s s2)
+end)
+
 
 (* streams of x86 instructions ---------------------------------------------- *)
 
@@ -740,9 +746,97 @@ let greedy_layout (f:Ll.fdecl) (live:liveness) : layout =
 *)
 
 let better_layout (f:Ll.fdecl) (live:liveness) : layout =
-  failwith "Backend.better_layout not implemented"
+    let rec gcolor regs spills adjlist mcols =
+        if (Datastructures.UidM.is_empty adjlist) then
+            mcols, spills, regs
+        else
+        let deg_vert_lt = Datastructures.UidM.filter 
+            (fun _ g0 -> UidSet.cardinal g0 < 7) adjlist in
+        if (Datastructures.UidM.is_empty deg_vert_lt) then
+            let (v, n) = Datastructures.UidM.choose adjlist in
+            let (spilled, verts) = Datastructures.UidM.fold (fun d g1 (d2, g2) -> 
+                if (UidSet.cardinal g2) < (UidSet.cardinal g1) 
+                then (d, g1) else (d2, g2)) adjlist (v, n) in
+            gcolor regs (1 + (fst spills), [(spilled, Alloc.LStk 
+                (- (1 + (fst spills))))] @ (snd spills))
+            (UidSet.fold (fun neighbor s -> Datastructures.UidM.add neighbor (
+                UidSet.remove spilled (Datastructures.UidM.find neighbor adjlist)) s)
+                verts (Datastructures.UidM.remove spilled adjlist))
+                (Datastructures.UidM.add spilled (Alloc.LStk (- (1 + (fst spills)))) mcols)
+        else
+        let (v, n) = Datastructures.UidM.choose deg_vert_lt in
+        let v2, neighbors = Datastructures.UidM.fold(fun d g3 (d2, g4) -> 
+            if (UidSet.cardinal g4) < (UidSet.cardinal g3) 
+            then (d, g3) else (d2, g4)) deg_vert_lt (v, n) in
 
+        let (gcols, spilled2, regs2) = gcolor regs spills (
+            UidSet.fold(fun nbor s -> Datastructures.UidM.add nbor (
+            UidSet.remove v2 (Datastructures.UidM.find nbor adjlist)) s)
+            neighbors (Datastructures.UidM.remove v2 adjlist)) mcols in
 
+        let col = LocSet.choose (UidSet.fold (fun adjnode g5 -> LocSet.remove (
+            Datastructures.UidM.find adjnode gcols) g5) neighbors (
+            LocSet.(remove (Alloc.LReg Rcx) (remove (Alloc.LReg Rax) caller_save)))) in
+        (Datastructures.UidM.add v2 col gcols, spilled2, (Map_of_LocSet.add col 
+            ((Map_of_LocSet.find col regs2) + 1) regs2)) in
+
+        let blocks = [("", (fst f.f_cfg))] @ (snd f.f_cfg) in
+        let args_of_n = ref 0 in
+        let spill_of_n = ref 0 in
+        let args_of_alloc = List.map(fun g6 -> (g6, (let res = (
+            match arg_loc !args_of_n with
+            | Alloc.LReg Rcx -> (incr spill_of_n; Alloc.LStk (- !spill_of_n))
+            | _ -> arg_loc !args_of_n) in incr args_of_n; res
+        ))) f.f_param in
+
+        let rig = Datastructures.UidM.fold (fun g7 nbor s ->
+            Datastructures.UidM.add g7 (UidSet.remove g7 nbor) s)
+            (List.fold_left (fun g8 (lbl, blk) ->
+                let live2 = live.live_in (fst blk.term) in
+                UidSet.fold (fun uid lst -> 
+                    if Datastructures.UidM.mem uid lst
+                        then Datastructures.UidM.add uid 
+                        (UidSet.union (Datastructures.UidM.find uid lst) 
+                        (live2)) lst
+                    else Datastructures.UidM.add uid (live2) lst) (live2)
+                (List.fold_left (fun g9 uid ->
+                    let live3 = live.live_in uid in
+                    UidSet.fold (fun uid g10 ->
+                        if Datastructures.UidM.mem uid g10 then
+                            Datastructures.UidM.add uid (UidSet.union 
+                            (Datastructures.UidM.find uid g10) (live3)) g10
+                        else Datastructures.UidM.add uid (live3) g10) (live3)
+                    (if Datastructures.UidM.mem uid g9 then g9 else 
+                        Datastructures.UidM.add uid UidSet.empty g9))
+            g8 (List.map fst blk.insns))) (Datastructures.UidM.empty) 
+                blocks) Datastructures.UidM.empty in
+            
+            let (rig2, colrs) = List.fold_left (fun (rig3, mpcols) (l, blk) ->
+                List.fold_left (fun (g11, g12) (id, ins) ->
+                    if insn_assigns ins then (g11, g12)
+                    else (Datastructures.UidM.remove id (UidSet.fold (fun g13 g14 ->
+                        Datastructures.UidM.add g13 (UidSet.remove id 
+                        (Datastructures.UidM.find g13 g14)) g11)
+                        (Datastructures.UidM.find id g11) g11),
+                        Datastructures.UidM.add id Alloc.LVoid g12))
+                (rig3, mpcols) blk.insns) (rig, Datastructures.UidM.empty) blocks in
+            
+            let (gcols2, spills, _) = gcolor (List.fold_left (fun g15 r ->
+                Map_of_LocSet.add r 0 g15) Map_of_LocSet.empty (List.map 
+                    (fun regs3 -> Alloc.LReg regs3) 
+                    [ Rdi; Rsi; Rdx; R08; R09; R10; R11 ]))
+                (!spill_of_n, []) rig2 colrs in
+            
+            { uid_loc = (fun g16 ->
+                if Datastructures.UidM.mem g16 gcols2 then 
+                    Datastructures.UidM.find g16 gcols2
+                else if List.exists (fun g17 -> g17 = g16) 
+                    f.f_param then List.assoc g16 args_of_alloc
+                else if List.exists (fun g18 -> g16 = (fst g18)) 
+                    (snd f.f_cfg) then List.assoc g16 (List.map (fun (lbl, _) -> 
+                        (lbl, Alloc.LLbl (Platform.mangle lbl))) (snd f.f_cfg))
+                else failwith "Register Allocation Error")
+            ; spill_bytes = 8 * (fst spills)}
 
 (* register allocation options ---------------------------------------------- *)
 (* A trivial liveness analysis that conservatively says that every defined
