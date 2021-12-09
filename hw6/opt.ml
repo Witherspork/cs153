@@ -40,9 +40,12 @@ let opt_level = ref 0
 
 (* optimize each fdecl in the program *)
 let optimize (p:Ll.prog) : Ll.prog = 
-  if !opt_level = 2 then
+  if !opt_level = 2 
+  then begin
     (* OPTIONAL TASK: implement additional optimizations *)
-    failwith "No -O2 optimizations implemented! This is an optional task."
+    Platform.verb @@ Printf.sprintf "...optimizing";
+    { p with Ll.fdecls = List.map opt_fdecl p.Ll.fdecls }
+  end
   else if !opt_level = 1 
   then begin 
     Platform.verb @@ Printf.sprintf "..optimizing";  

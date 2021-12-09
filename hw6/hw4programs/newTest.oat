@@ -1,0 +1,27 @@
+int program(int argc, string[] argv) {
+    var bacterium_a = 200000;
+    var bacterium_b = 100000;
+    var food = 10000000;
+
+    for (var i = 0; i < 10000000; i = i + 1) {
+        var dif = bacterium_a - bacterium_b;
+        var growth_of_a = dif >> 7;
+        food = food + 100;
+
+        var potential_b = food - bacterium_b;
+        var growth_of_b = potential_b >> 2;
+
+        var hungry_b = bacterium_b >> 3;
+        var starving_b = hungry_b >> 2;
+        var successful_b = hungry_b - starving_b;
+
+        var change_in_a = growth_of_a - successful_b;
+        var change_in_b = growth_of_b - starving_b;
+
+        bacterium_a = bacterium_a + change_in_a;
+        bacterium_b = bacterium_b + change_in_b;
+    }
+
+    print_int(bacterium_a);
+    return 0;
+}
